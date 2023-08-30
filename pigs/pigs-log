@@ -1,0 +1,24 @@
+#!/bin/dash
+
+# Check directory exists
+if ! test -d .pig
+then
+    echo "pigs-log: error: pigs repository directory .pig not found" >&2
+    exit 1
+fi
+
+# Check no arguments
+if test "$#" -ne 0
+then
+    echo "usage: pigs-log"
+    exit 1
+fi
+
+# Get curr branch
+curr_branch=$(cat ".pig/HEAD")
+
+if test -f ".pig/logs/$curr_branch"
+then
+    cat ".pig/logs/$curr_branch"
+fi
+

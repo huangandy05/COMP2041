@@ -1,0 +1,127 @@
+#!/bin/dash
+
+# directory not found
+if ! test -d .pig
+then
+    echo "pigs-branch: error: pigs repository directory .pig not found" >&2
+    exit 1
+fi
+
+# Check that there has been a commit - head file will be null if there hasn't been one
+# First, we need to find what branch we are in
+commit_no=$(cat ".pig/heads/$(cat ".pig/HEAD")")
+
+if test "$commit_no" = null
+then
+    echo "pigs-branch: error: this command can not be run until after the first commit"
+    exit 1 # MAKE SURE TO UNCOMMENT
+fi
+
+# Check less than 3 args
+if test "$#" -gt 2
+then
+    echo "usage: pigs-branch [-d] <branch>"
+    exit 1
+fi
+
+# Print out branches if no arguments
+if test "$#" -eq 0
+then
+    for branch in ".pig/heads"/*
+    do
+        basename "$branch"
+    done | sort
+    exit 0
+fi
+
+# Check for delete options and invalid '-'
+delete_flag=false
+while getopts ":d" opts; do
+    case $opts in
+        d)
+            delete_flag=true
+            ;;
+        *)
+            echo "usage: pigs-branch [-d] <branch>"
+            exit 1
+    esac
+done
+
+# Get the branch name
+shift $((OPTIND - 1))
+
+if [ "$#" -eq 0 ]; then
+    echo "pigs-branch: error: branch name required" >&2
+    exit 1
+fi
+
+branch=$1
+
+## Delete option
+if $delete_flag
+then
+    # Can't delete master branch
+    if test "$branch" = 'master'; then
+        echo "pigs-branch: error: can not delete branch 'master': default branch"
+        exit 1
+    fi
+
+    # Check branch exists
+    if ! test -f ".pig/heads/$branch"
+    then
+        echo "pigs-branch: error: branch '$branch' doesn't exist"
+        exit 1
+    fi
+
+    # Cannot delete current branch
+    if test "$branch" = "$(cat ".pig/HEAD")"
+    then
+        echo "pigs-branch: error: can not delete branch '$branch': current branch"
+        exit 1
+    fi
+
+    # TODO: Need to implement checks to be able to delete file
+    can_delete=true
+
+
+    # Passes check -> Delete the branch
+    if $can_delete
+    then
+        rm -f ".pig/heads/$branch"
+        rm -f ".pig/logs/$branch"
+        rm -rf ".pig/branches/$branch"
+        echo "Deleted branch '$branch'"
+        exit 0
+    fi
+fi
+
+## Create new branch
+# Make sure branch doesn't already exist
+if test -f ".pig/heads/$branch"
+then
+    echo "pigs-branch: error: branch '$branch' already exists"
+    exit 1
+fi
+
+echo "some commit number" > ".pig/heads/$branch"
+# Also need to copy logs of curr branch to created branch
+curr_branch="$(cat ".pig/HEAD")"
+mkdir ".pig/branches/$branch"
+mkdir ".pig/branches/$branch/index"
+mkdir ".pig/branches/$branch/working"
+
+cp -a ".pig/logs/$curr_branch" ".pig/logs/$branch"
+# cp -R ".pig/branches/$curr_branch/" ".pig/branches/"
+
+
+# # copy files to working directory
+# for file in *
+# do
+#     cp "$file" ".pig/branches/$branch/working"
+# done
+
+# # Copy files in index of current branch
+# for file in ".pig/branches/$branch/index"/*
+# do
+#     cp ".pig/branches/$curr_branch/index/$file" ".pig/branches/$branch/index/$file"
+# done

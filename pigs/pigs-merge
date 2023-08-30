@@ -1,0 +1,8 @@
+#!/bin/dash
+
+# directory not found
+if ! test -d .pig
+then
+    echo "pigs-merge: error: pigs repository directory .pig not found" >&2
+    exit 1
+fi

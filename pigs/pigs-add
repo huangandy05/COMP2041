@@ -1,0 +1,43 @@
+#!/bin/dash
+
+# Check that the pig repository directory exists
+if ! test -d ".pig"
+then
+    echo "pigs-add: error: pigs repository directory .pig not found"
+    exit 1
+fi
+
+# Check that there are arguments
+if test "$#" -eq 0
+then
+    echo "usage: pigs-add <filenames>"
+    exit 1
+fi
+
+# Get the curr branch
+curr_branch=$(cat ".pig/HEAD")
+# Get the index dir
+curr_index_dir=".pig/branches/$curr_branch/index"
+
+# Check files exist
+for file in "$@"
+do
+    if ! test -f "$file" && ! test -f "$curr_index_dir/$file"
+    then
+        echo "pigs-add: error: can not open '$file'"
+        exit 1
+    fi
+done
+
+# add all files to index - all files must exist
+for file in "$@"
+do
+    # Case 1: file exists in index but not directory -> remove from index
+    if ! test -f "$file" && test -f "$curr_index_dir/$file"
+    then
+        rm "$curr_index_dir/$file"
+    # case 2: file exists in directory and index -> add to index
+    else
+        cp "$file" "$curr_index_dir/$file"
+    fi
+done

@@ -1,0 +1,162 @@
+#!/bin/dash
+
+# directory not found
+if ! test -d .pig
+then
+    echo "pigs-rm: error: pigs repository directory .pig not found" >&2
+    exit 1
+fi
+
+# Get the curr branch
+curr_branch=$(cat ".pig/HEAD")
+# Get the index dir
+curr_index_dir=".pig/branches/$curr_branch/index"
+
+# Incorrect usage
+cached_flag=false
+force_flag=false
+
+# Convert long options to short options
+for arg in "$@"; do
+  shift
+  case "$arg" in
+    '--cached')
+        set -- "$@" '-c'   ;;
+    '--force') 
+        set -- "$@" '-f'   ;;
+    *)          
+        set -- "$@" "$arg" ;;
+  esac
+done
+
+while getopts ':cf' opts
+do
+	case "$opts" in
+		c) 
+            cached_flag=true
+            ;;
+		f) 
+            force_flag=true
+            ;;
+		-*) 
+            echo "usage: pigs-rm [--force] [--cached] <filenames>" >&2
+            exit 1
+	esac
+done
+
+# Check an argument is given
+shift $((OPTIND -1))
+
+if [ "$#" -eq 0 ]; then
+    echo "usage: pigs-rm [--force] [--cached] <filenames>" >&2
+    exit 1
+fi
+
+# for arg in "$@"; do
+#     case $arg in
+#         --cached)
+#             cached_flag=true
+#             ;;
+#         --force)
+#             force_flag=true
+#             ;;
+#         -*)
+#             echo "usage: pigs-rm [--force] [--cached] <filenames>" >&2
+#             exit 1
+#             ;;
+#     esac
+# done
+
+# Get the last commit number
+commit_no=0
+while test -d ".pig/commit_list/$commit_no"
+do
+    commit_no=$((commit_no+1))
+done
+commit_no=$((commit_no-1))
+
+
+# Loop through the arguments that don't start with '-'
+# For each file, we need to check
+# 1) file is in the pigs repository
+# 2) file in index not different to both working file and repository
+# 3) file has no staged changes in the index
+# 4) repo is diff to the working file
+for arg in "$@"
+do
+    if [ "$(echo "$arg" | cut -c1-1)" != '-' ]
+    then
+        # 1) exists in index
+        if ! test -f "$curr_index_dir/$arg"
+        then
+            echo "pigs-rm: error: '$arg' is not in the pigs repository" >&2
+            exit 1
+        fi
+
+        # Bypass 2, 3, 4 if force flag
+        if ! $force_flag
+        then
+            indexRootDiff=false
+            indexRepoDiff=false
+            rootRepoDiff=false
+            # Check that file exists in root and is different
+            if test -f "$arg" && ! diff "$arg" "$curr_index_dir/$arg" >/dev/null
+            then
+                indexRootDiff=true
+                # echo "$arg different from index and root"
+            fi
+
+            # Check file doens't exist in repo or 
+            if ! test -f ".pig/commit_list/$commit_no/$arg" || ! diff ".pig/commit_list/$commit_no/$arg" "$curr_index_dir/$arg" >/dev/null
+            then
+                indexRepoDiff=true
+                # echo "$arg differnt from index and repo"
+            fi
+
+            # Check file exists in repo and is different
+            if test -f ".pig/commit_list/$commit_no/$arg" && test -f "$arg" && ! diff ".pig/commit_list/$commit_no/$arg" "$arg" >/dev/null
+            then
+                rootRepoDiff=true
+                # echo "$arg differnt from root and repo"
+            fi
+
+            # 2) file in index is different from both working file and repo
+            if $indexRootDiff && $indexRepoDiff
+            then
+                echo "pigs-rm: error: '$arg' in index is different to both the working file and the repository" >&2
+                exit 1
+            fi
+
+            # 3) index file diff from repo but same as root (no cache)
+            if $indexRepoDiff && ! $cached_flag
+            then
+                echo "pigs-rm: error: '$arg' has staged changes in the index" >&2
+                exit 1
+            fi
+
+            # 4) file in index is different from both working file and repo
+            if $rootRepoDiff && ! $cached_flag
+            then
+                echo "pigs-rm: error: '$arg' in the repository is different to the working file" >&2
+                exit 1
+            fi
+        fi
+    fi
+done
+
+# Remove the files
+for arg in "$@"
+do
+    # Only get files not starting with -
+    if [ "$(echo "$arg" | cut -c1-1)" != '-' ]
+    then
+        # remove from index
+        rm "$curr_index_dir/$arg"
+
+        # if doesn't have cache flag, remove from root
+        if test -f "$arg" && ! $cached_flag
+        then
+            rm "$arg"
+        fi
+    fi
+done

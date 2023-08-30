@@ -1,0 +1,39 @@
+#!/bin/dash
+
+# Check no args
+if test "$#" -ne 0
+then
+    echo "usage: pigs-init" >&2
+    exit 1
+fi
+
+# check if repo exists - if it doesn't create
+if test -d ".pig"
+then
+    echo "pigs-init: error: .pig already exists" 1>&2
+    exit 1
+fi
+
+
+mkdir ".pig"
+cd ".pig" || exit
+mkdir "index"
+mkdir "commit_list"
+# echo > logs.txt
+mkdir "logs"
+
+## Subset 2 stuff
+# the heads directory keeps track of the commit position of each branch. HEAD stores teh current branch
+mkdir "heads"
+echo -n "null" > "heads/master"
+echo -n "master" > "HEAD"
+
+# The branch directory will keep track of the working directory and index indirectory of each branch
+mkdir "branches"
+mkdir "branches/master"
+mkdir "branches/master/index"
+mkdir "branches/master/working"
+
+mkdir "backup_wd" # store a copy of root directory when there is a switch
+
+echo "Initialized empty pigs repository in .pig"

@@ -1,0 +1,74 @@
+#!/bin/dash
+
+# directory not found
+if ! test -d .pig
+then
+    echo "pigs-checkout: error: pigs repository directory .pig not found" >&2
+    exit 1
+fi
+
+# Check that there has been a commit - head file will be null if there hasn't been one
+# First, we need to find what branch we are in
+commit_no=$(cat ".pig/heads/$(cat ".pig/HEAD")")
+
+if test "$commit_no" = null
+then
+    echo "pigs-checkout: error: this command can not be run until after the first commit"
+    exit 1 # MAKE SURE TO UNCOMMENT
+fi
+
+# ensure there is one arguments
+if test "$#" -ne 1
+then
+    echo "usage: pigs-checkout <branch>"
+    exit 1
+fi
+
+branch=$1
+
+# Make sure branch exists
+if ! test -f ".pig/heads/$branch"
+then
+    echo "pigs-checkout: error: unknown branch '$branch'"
+    exit 1
+fi
+
+# Make sure branch is different
+if test "$branch" = "$(cat ".pig/HEAD")"
+then
+    echo "Already on '$branch'"
+    exit 0
+fi
+
+# NEED TO RUN CHECKS HERE
+
+# Check if new branch is on differnt commit for addional checks
+checkout_commit_no=$(cat ".pig/heads/$branch")
+if test "$checkout_commit_no" -ne "$commit_no"
+then
+    # Make a temporary file to store files overwritten by checkout
+
+    # find files using status
+    # pigs-status
+
+    if test -s ".pig/.temp"
+    then
+        echo "pigs-checkout: error: Your changes to the following files would be overwritten by checkout:"
+        sort < ".pig/temp" | uniq
+        exit 1
+    fi
+
+    # Replace index
+    cp ".pig/commit_list/$checkout_commit_no/*" ".pig/branches/$branch/index"
+    # remove files that aren't untracked
+    # for file in *; do 
+
+    # done
+    
+fi
+
+
+# Change head pointer
+echo -n "$branch" > ".pig/HEAD"
+echo "Switched to branch '$branch'"
+exit 0

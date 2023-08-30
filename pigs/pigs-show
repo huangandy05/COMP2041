@@ -1,0 +1,69 @@
+#!/bin/dash
+
+# check directory exists
+if ! test -d .pig
+then
+    echo "pigs-show: error: pigs repository directory .pig not found" >&2
+    exit 1
+fi
+
+# Make sure there is only one argument
+if ! test "$#" -eq 1
+then
+    echo "usage: pigs-show <commit>:<filename>" >&2
+    exit 1
+fi
+
+
+# Make sure theres a colon
+if ! echo "$1" | grep -q ":"; then
+    echo "usage: pigs-show <commit>:<filename>" >&2
+    exit 1
+fi
+
+# Get the curr branch
+curr_branch=$(cat ".pig/HEAD")
+# Get the index dir
+curr_index_dir=".pig/branches/$curr_branch/index"
+
+# Get the commit number/value
+commit_no=$(echo "$1" | cut -d':' -f1)
+filename=$(echo "$1" | sed -E "s/^[^:]*://")
+
+
+# Check commit value exists
+if ! test -d ".pig/commit_list/$commit_no"
+then
+    echo "pigs-show: error: unknown commit '$commit_no'" >&2
+    exit 1
+fi
+
+# Check filename is valid - non empty., only alphanumeric or . _ - , start with alphanumeric
+if test -z "$filename" || test "$(echo "$filename" | grep -Ev '^[-a-zA-Z0-9._]*$')" || test "$(echo "$filename" | grep -E '^[-_.]')"
+then
+    echo "pigs-show: error: invalid filename '$filename'" >&2
+    exit 1
+fi
+
+# No commit given
+if test -z "$commit_no"
+then
+    # Check filename is valid in index
+    if ! test -f "$curr_index_dir/$filename"
+    then
+        echo "pigs-show: error: '$filename' not found in index"
+        exit 1
+    else 
+        cat "$curr_index_dir/$filename"
+    fi
+else
+    # Check file exists in the commit number directory
+    if ! test -f ".pig/commit_list/$commit_no/$filename"
+    then
+        echo "pigs-show: error: '$filename' not found in commit $commit_no" >&2
+        exit 1
+    else 
+        # Commit number given -> print file in commit directory
+        cat ".pig/commit_list/$commit_no/$filename"
+    fi
+fi

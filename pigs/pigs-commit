@@ -1,0 +1,119 @@
+#!/bin/dash
+
+# Check the pigs directory exists
+if ! test -d .pig
+then
+    echo "pigs-commit: error: pigs repository directory .pig not found" >&2
+    exit 1
+fi
+
+# Check for no args
+if test "$#" -eq 0
+then
+    echo "usage: pigs-commit [-a] -m commit-message" >&2
+    exit 1
+fi
+
+# Got some help with this site to use getopts
+# https://www.baeldung.com/linux/use-command-line-arguments-in-bash-script
+a_flag='false'
+message=''
+
+# Parse command-line options
+while getopts ":am:" flag; do
+    case $flag in
+        a)
+            a_flag='true' # Check if -a is there
+            ;;
+        m)  # get the message
+            message="$OPTARG"
+            ;;
+        *) # invalid flags
+            echo "usage: pigs-commit [-a] -m commit-message" >&2
+            exit 1
+    esac
+done
+
+# We also need to check if there are any additional arguments -> './pigs-commit -a -m hi there' shouldn't work
+# Shift off options and optional argument
+shift $((OPTIND -1))
+
+if [ "$#" -gt 0 ]; then
+    echo "usage: pigs-commit [-a] -m commit-message" >&2
+    exit 1
+fi
+
+# Get the curr branch
+curr_branch=$(cat ".pig/HEAD")
+# Get the index dir
+curr_index_dir=".pig/branches/$curr_branch/index"
+
+## SUBSET 1 - -a functionality
+# Update files in index with contents from current directory
+if $a_flag
+then
+    # Loop through files in index
+    # cd $curr_index_dir || exit # change directories
+    for root_file in *
+    do
+        # Check if it exists in root
+        for index_file in "$curr_index_dir"/*
+        do
+            if [ "$index_file" = "$curr_index_dir/$root_file" ]
+            then
+                cp "$root_file" "$curr_index_dir/"
+                # echo "$index_file $root_file"
+            fi
+        done
+    done
+fi
+
+# Get the next commit number
+commit_no=0
+while test -d ".pig/commit_list/$commit_no"
+do
+    commit_no=$((commit_no+1))
+done
+
+last_commit_no=$((commit_no-1))
+
+# Check if any changes were made -> if not then then print nothing to commit
+if test "$commit_no" -gt 0 && diff -r "$curr_index_dir" ".pig/commit_list/$last_commit_no" >/dev/null
+then
+    echo "nothing to commit"
+    exit 0
+fi
+
+# Create new subdirectory
+mkdir ".pig/commit_list/$commit_no"
+
+# Add to logs
+curr_branch=$(cat ".pig/HEAD")
+
+# https://superuser.com/questions/246837/how-do-i-add-text-to-the-beginning-of-a-file-in-bash
+log_msg="$commit_no $message"
+
+if test -f ".pig/logs/$curr_branch"
+then
+    sed -i "1s/^/$log_msg\n/" ".pig/logs/$curr_branch"
+else
+    echo "$log_msg" > ".pig/logs/$curr_branch"
+fi
+
+# Copy files from index to directory
+# cd "$curr_index_dir" || exit
+# check if index is not empty
+for file in "$curr_index_dir"/*
+do
+    if [ -e "$file" ]
+    then
+        cp "$file" ".pig/commit_list/$commit_no" 
+    fi
+done
+
+## SUBSET 2 functionality
+# update branch in heads
+# curr_branch=$(cat ".pig/HEAD")
+echo "$commit_no" > ".pig/heads/$curr_branch"
+
+echo "Committed as commit $commit_no"

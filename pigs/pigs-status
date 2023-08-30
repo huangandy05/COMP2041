@@ -1,0 +1,159 @@
+#!/bin/dash
+
+# directory not found
+if ! test -d .pig
+then
+    echo "pigs-status: error: pigs repository directory .pig not found" >&2
+    exit 1
+fi
+
+# Incorrect args
+if ! test "$#" -eq 0
+then
+    echo "usage: pigs-status" >&2
+    exit 1
+fi
+
+# Get the last commit number
+commit_no=0
+while test -d ".pig/commit_list/$commit_no"
+do
+    commit_no=$((commit_no+1))
+done
+commit_no=$((commit_no-1))
+
+# Get the curr branch
+curr_branch=$(cat ".pig/HEAD")
+# Get the index dir
+# curr_index_dir=".pig/branches/$curr_branch/index"
+
+
+# Get the root, index and repo directories
+root_dir="."
+index_dir=".pig/branches/$curr_branch/index"
+if test $commit_no -eq -1
+then
+    repo_dir=".pig/commit_list/"
+else
+    repo_dir=".pig/commit_list/$commit_no"
+fi
+
+
+# List of all unique filename in root, index and repo dir and sort them and remove dupes
+all_files=$(find "$root_dir" "$index_dir" "$repo_dir" -maxdepth 1 -type f | grep -oP ".*/\K.*" | sort -u)
+
+
+for file in $all_files
+do
+    # First, we need to test if each file is in the index, repo or root
+    isInRoot=false
+    isInIndex=false
+    isInRepo=false
+
+    if test -f "$root_dir/$file"; then isInRoot=true; fi
+    if test -f "$index_dir/$file"; then isInIndex=true; fi
+    if test -f "$repo_dir/$file"; then isInRepo=true; fi
+
+    # Next, check whether files are different between root, index and repo
+    rootIndexDiff=false
+    rootRepoDiff=false
+    indexRepoDiff=false
+
+    if $isInRoot && $isInIndex && ! diff "$root_dir/$file" "$index_dir/$file" >/dev/null; then rootIndexDiff=true; fi
+    if $isInRoot && $isInRepo && ! diff "$root_dir/$file" "$repo_dir/$file" >/dev/null; then rootRepoDiff=true; fi
+    if $isInIndex && $isInRepo && ! diff "$index_dir/$file" "$repo_dir/$file" >/dev/null; then indexRepoDiff=true; fi
+
+    # Print all the different cases
+    # (a b null) denotes file is in root and index but not in repo. File is also different between root and repo
+    # (a null a) denotes file is in root and repo. content is also the same
+
+    # Case 1: (a null null)
+    if $isInRoot && ! $isInIndex && ! $isInRepo
+    then
+        echo "$file - untracked"
+        continue
+    fi
+
+    # Case 2: (null a null)
+    if ! $isInRoot && $isInIndex && ! $isInRepo
+    then 
+        echo "$file - added to index, file deleted"
+        continue
+    fi
+
+    # Case 3: (null null a)
+    if ! $isInRoot && ! $isInIndex && $isInRepo
+    then 
+        echo "$file - file deleted, deleted from index"
+        continue
+    fi
+
+    # Case 4: (a a null)
+    if $isInRoot && $isInIndex && ! $isInRepo && ! $rootIndexDiff
+    then 
+        echo "$file - added to index"
+        continue
+    fi
+
+    # Case 5: (a b null)
+    if $isInRoot && $isInIndex && ! $isInRepo && $rootIndexDiff
+    then 
+        echo "$file - added to index, file changed"
+        continue
+    fi
+
+    # Case 6: (a null a) and (a null b)
+    if $isInRoot && ! $isInIndex && $isInRepo
+    then
+        echo "$file - deleted from index"
+        continue
+    fi
+
+    # Case 7: (null a a)
+    if ! $isInRoot && $isInIndex && $isInRepo && ! $indexRepoDiff
+    then
+        echo "$file - file deleted"
+        continue
+    fi
+
+    # Case 8: (null a b)
+    if ! $isInRoot && $isInIndex && $isInRepo && $indexRepoDiff
+    then
+        echo "$file - file deleted, changes staged for commit"
+        continue
+    fi
+
+    # Case 9: (a a a)
+    if $isInRoot && $isInIndex && $isInRepo && ! $rootIndexDiff && ! $rootRepoDiff
+    then
+        echo "$file - same as repo"
+        continue
+    fi
+
+    # Case 10: (a b b)
+    if $isInRoot && $isInIndex && $isInRepo && $rootIndexDiff && ! $indexRepoDiff
+    then
+        echo "$file - file changed, changes not staged for commit"
+        continue
+    fi
+
+    # Case 12: (a b c)
+    if $isInRoot && $isInIndex && $isInRepo && $rootIndexDiff && $indexRepoDiff
+    then
+        echo "$file - file changed, different changes staged for commit"
+        continue
+    fi
+    
+    # Case 11: (a a b) or (a b a)
+    if $isInRoot && $isInIndex && $isInRepo && $indexRepoDiff
+    then
+        echo "$file - file changed, changes staged for commit"
+        continue
+    fi
+
+
+    # if none of the above cases is true - print an error - this shouldnt happen...
+    echo "error - no case matched"
+
+done
+
