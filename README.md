@@ -1,4 +1,4 @@
-# COMP2041
+# COMP2041: Software Construction
 Assignments for COMP2041 23T2
 
 ## Assignment 1: Pigs
